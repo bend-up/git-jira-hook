@@ -47,6 +47,7 @@ import string
 from suds.client import Client
 
 myname = os.path.basename(sys.argv[0])
+global_jirarc = os.path.dirname(sys.argv[0] + "/../jirarc")
 if len(sys.argv) > 1 and sys.argv[1].startswith('--action='):
     action_arg = sys.argv.pop(1)
     myname = action_arg.split('=')[1]
@@ -345,10 +346,16 @@ def jira_login(jira_url, soap_client):
     auth = get_jira_cached_auth(jira_url)
     if auth: 
         auth = jira_implicit_login(soap_client, auth)
-    
+
     if not auth:
         username = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "username")
         password = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "password")
+        auth = soap_client.service.login(username, password)
+
+    # If the user based version was unsuccessful, try the project one
+    if not auth:
+        username = get_cfg_value(global_jirarc, jira_url, "username")
+        password = get_cfg_value(global_jirarc, jira_url, "password")
         auth = soap_client.service.login(username, password)
     
     if not auth:
@@ -482,10 +489,15 @@ def get_jira_url():
     return jira_url
 
 def get_jira_cached_auth(jira_url):
-    return get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", silent=True)
+    value =  get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", silent=True)
+    if not value
+    	value =  get_cfg_value(global_jirarc, jira_url, "auth", silent=True)
+    return value
 
 def save_jira_cached_auth(jira_url, auth):
-    return save_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", auth)
+    value = save_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", auth)
+    if not value
+        value = save_cfg_value(global_jirarc, jira_url, "auth", auth)
 
 
 #---------------------------------------------------------------------
@@ -515,14 +527,14 @@ def save_cfg_value(cfg_file_name, section, key, value):
     except Exception, e:
         log.warning("Failed to instantiate a ConfigParser object")
         log.debug(e)
-        return
+        return None
 
     try:
         cfg.read(cfg_file_name)
     except Exception, e:
-        log.warning("Failed to read .jirarc")
+        log.warning("Failed to read " + cfg_file_name)
         log.debug(e)
-        return
+        return None
 
     try:
         cfg.add_section(section)
@@ -540,7 +552,8 @@ def save_cfg_value(cfg_file_name, section, key, value):
     except Exception, e:
         log.warning("Failed to write '%s'='%s' to file %s", key, value, cfg_file_name)
         log.debug(e)
-        return
+        return None
+    return 1  
 
 # given a string, executes it as an executable, and returns the STDOUT
 # as a string
