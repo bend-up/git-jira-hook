@@ -509,10 +509,16 @@ def save_jira_cached_auth(jira_url, auth):
 # Misc. helper functions
 #
 def get_gitweb_url():
-    return git_config_get("gitweb.url")
+    value = git_config_get("gitweb.url")
+    value = value.replace("%PROJECTNAME%", os.path.abspath(sys.argv[0]+"/../../").replace(git_config_get("gitweb.root")+"/",""))
+    log.debug("Gitweb URL = " + value)
+    return value
 
 def get_gitweb_branch_url():
-    return git_config_get("gitweb.branchurl")
+    value =  git_config_get("gitweb.branchurl")
+    value = value.replace("%PROJECTNAME%", os.path.abspath(sys.argv[0]+"/../../").replace(git_config_get("gitweb.root")+"/",""))
+    log.debug("Gitweb URL = " + value)
+    return value
 
 def get_cfg_value(cfg_file_name, section, key, silent=False):
     try:

@@ -211,6 +211,9 @@ values to use for your "jira.url".
          password=mypassword
       This file will also store a temporary auth token.
 
+      If you want all users to use the same login, create the jirarc file in the root of 
+      your bare repository (one directory up from 'hooks')
+
 (iv)  [Optional] If you wish jira integration to be triggered only
       on certain branches, add a comma-separated list of 
       branch names to git config "git-jira-hook.branches"
@@ -282,6 +285,18 @@ http://git.mycompany.com/gitweb.cgi?p=joyjit-repo/.git;a=commit;h=424daa955f5c8a
 
        Then the "gitweb.url" to use is:
        "http://git.mycompany.com/gitweb.cgi?p=joyjit-repo/.git;a=commit;h="
+
+	You can also replace 'joyjit-repo' with the %PROJECTNAME%. In this case, you also have to add 
+	the gitweb.root varaible to represent the base path of gitweb. The gitweb.root should not have a 
+	trailing '/'
+
+	Example:
+	[jira]
+	        url = https://myjira.mycompany.com
+	[gitweb]
+	        root = /var/git
+	        url = "http://mygit.mycompany.com/gitweb/?p=%PROJECTNAME%;a=commit;h="
+	        branchurl = "http://mygit.mycompany.com/gitweb/?p=%PROJECTNAME%;a=shortlog;h=refs/heads/"
 
 
 7. Credits
