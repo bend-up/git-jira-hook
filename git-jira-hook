@@ -47,7 +47,7 @@ import string
 from suds.client import Client
 
 myname = os.path.basename(sys.argv[0])
-global_jirarc = os.path.dirname(sys.argv[0] + "/../jirarc")
+global_jirarc = os.path.dirname(sys.argv[0]) + "/../jirarc"
 if len(sys.argv) > 1 and sys.argv[1].startswith('--action='):
     action_arg = sys.argv.pop(1)
     myname = action_arg.split('=')[1]
@@ -58,7 +58,6 @@ if loglevel != logging.DEBUG:
     # suds prints out a lot of ERRORs that we don't need to see, since it raises an Exception also
     logging.getLogger('suds.client').setLevel(logging.CRITICAL)
 log = logging.getLogger(myname)
-
 def main():
     if myname == "commit-msg" :
         return handle_commit_msg()
@@ -350,7 +349,10 @@ def jira_login(jira_url, soap_client):
     if not auth:
         username = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "username")
         password = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "password")
-        auth = soap_client.service.login(username, password)
+	try:
+            auth = soap_client.service.login(username, password)
+	except:
+            auth = None
 
     # If the user based version was unsuccessful, try the project one
     if not auth:
@@ -490,13 +492,16 @@ def get_jira_url():
 
 def get_jira_cached_auth(jira_url):
     value =  get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", silent=True)
-    if not value
+    if not value:
     	value =  get_cfg_value(global_jirarc, jira_url, "auth", silent=True)
     return value
 
 def save_jira_cached_auth(jira_url, auth):
-    value = save_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", auth)
-    if not value
+    file_path = os.environ['HOME'] + "/.jirarc"
+    value = None
+    if os.path.isfile(file_path):
+        value = save_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", auth)
+    if not value:
         value = save_cfg_value(global_jirarc, jira_url, "auth", auth)
 
 
