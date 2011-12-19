@@ -666,5 +666,5 @@ def git_get_branches_with_commit(commit_id):
 #----------------------------------------------------------------------------
 # python script entry point. Dispatches main()
 if __name__ == "__main__":
-  exit (main())
+  sys.exit (main())
     
