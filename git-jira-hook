@@ -347,8 +347,8 @@ def jira_login(jira_url, soap_client):
         auth = jira_implicit_login(soap_client, auth)
 
     if not auth:
-        username = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "username")
-        password = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "password")
+        username = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "username", True)
+        password = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "password", True)
 	try:
             auth = soap_client.service.login(username, password)
 	except:
