@@ -63,8 +63,8 @@ def main():
         return handle_commit_msg()
     elif myname == "post-commit" :
         return handle_post_commit()
-    elif myname == "update":
-        return handle_update()
+    elif myname == "pre-receive":
+        return handle_pre_receive()
     elif myname == "post-receive":
         return handle_post_receive()
     else:
@@ -156,17 +156,20 @@ def handle_post_commit():
 # of "git push"
 # Parses the old and new commit IDs from argv[2] and argv[3]
 # argv[1] contains the "refname"
-def handle_update():
-    if len(sys.argv) < 4:
-        log.error("update hook called with incorrect no. of parameters")
+def handle_pre_receive():
+    buf = sys.stdin.read()
+    log.debug("handle_post_receive: stdin='%s'", buf)
+    (old_commit_id, new_commit_id, ref) =  string.split(buf, ' ')
+
+
+    if old_commit_id == None or new_commit_id == None or ref == None:
+        log.error("post-receive hook stdin is incorrect '%s'", buf)
         return -1
 
-    ref = sys.argv[1] # This is of the form "refs/heads/<branchname>"
-    old_commit_id = sys.argv[2]
-    new_commit_id = sys.argv[3]
-
-    if not enabled_on_branch(git_get_branchname_from_ref(ref)):
+    branch = git_get_branchname_from_ref(ref)
+    if not enabled_on_branch(branch):
         return 0
+
 
     jira_url = get_jira_url()
     if jira_url == None:
@@ -176,12 +179,27 @@ def handle_update():
     if jira_soap_client == None or jira_auth == None:
         return -1
 
-    commit_id_array = git_get_array_of_commit_ids(old_commit_id, new_commit_id)
+    zeros = '0000000000000000000000000000000000000000'
+    if new_commit_id == zeros:
+        log.debug('branch at %s deleted' % old_commit_id)
+        return 0
+   
+    if old_commit_id == zeros:
+        log.debug('new branch at %s' % new_commit_id)
+        commit_id_array = [new_commit_id]
+    else:
+        commit_id_array = git_get_array_of_commit_ids(old_commit_id, new_commit_id)
+
+    if commit_id_array == None or len(commit_id_array)==0:
+        log.error("no commit ids!")
+        return -1
 
     for commit_id in commit_id_array:
         commit_text = git_get_commit_msg(commit_id)
         if validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id) != 0:
             return -1
+        else:
+           jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
         
     return 0
 
@@ -205,6 +223,7 @@ def handle_post_receive():
     jira_url = get_jira_url()
     if jira_url == None:
         return -1
+
 
     (jira_soap_client, jira_auth) = jira_start_session(jira_url)
     if jira_soap_client == None or jira_auth == None:
@@ -247,8 +266,10 @@ def validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id=Non
     if refed_issue_count + fixed_issue_count == 0:
         if commit_id != None:
             log.error("Failed to find any referenced Jira issue in commit message for %s", commit_id)
+            return -1
         else:
-            log.info("Didn't find any referenced Jira issue in commit message(s)")
+            log.error("Didn't find any referenced Jira issue in commit message(s)")
+
     return 0
 
 
@@ -508,6 +529,7 @@ def save_jira_cached_auth(jira_url, auth):
 #---------------------------------------------------------------------
 # Misc. helper functions
 #
+
 def get_gitweb_url():
     value = git_config_get("gitweb.url")
     value = value.replace("%PROJECTNAME%", os.path.abspath(sys.argv[0]+"/../../").replace(git_config_get("gitweb.root")+"/",""))
@@ -667,4 +689,3 @@ def git_get_branches_with_commit(commit_id):
 # python script entry point. Dispatches main()
 if __name__ == "__main__":
   sys.exit (main())
-    
