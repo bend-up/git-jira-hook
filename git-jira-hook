@@ -59,108 +59,20 @@ if loglevel != logging.DEBUG:
     logging.getLogger('suds.client').setLevel(logging.CRITICAL)
 log = logging.getLogger(myname)
 def main():
-    if myname == "commit-msg" :
-        return handle_commit_msg()
-    elif myname == "post-commit" :
-        return handle_post_commit()
-    elif myname == "pre-receive":
+    if myname == "pre-receive":
         return handle_pre_receive()
-    elif myname == "post-receive":
-        return handle_post_receive()
     else:
-        log.error("invoked as '%s'. Need to be invoked as commit-msg, post-commit, update or post-receive.  Or, add first arg --action=post-receive (for example) before regular git hook args" , myname)
+        log.error("invoked as '%s'. Need to be invoked as pre-receive. " , myname)
         return -1
  
 
-# This function performs the git "commit-msg" hook
-# In this function, the commit message text is parsed for the magic
-# text referencing Jira issues. 
-# It logs into Jira and makes sure that the Jira issues exist
-# and are accessible
-# This function does not actually add any comments to Jira
-# as the user's commit has not yet gone through (that
-# Returns: 0 on success, -1 on error
-def handle_commit_msg():
-    if not enabled_on_branch(git_get_curr_branchname()):
-        return 0
-
-    if len(sys.argv) < 2 :
-        log.error("No commit message filename specified") 
-        return -1
-
-    commit_msg_filename = sys.argv[1]
-
-    jira_url = get_jira_url()
-    if jira_url == None:
-        return -1
-
-    try:
-        mode = os.stat(commit_msg_filename)[stat.ST_MODE]
-        if not stat.S_ISREG(mode):
-            log.error("'%s' is not a valid file", commit_msg_filename)
-
-    except KeyboardInterrupt:
-        log.info('... interrupted')
-
-    except Exception, e:
-        log.error("Failed to open file '%s'", commit_msg_filename)
-        log.debug(e)
-        return -1
-
-    (jira_soap_client, jira_auth) = jira_start_session(jira_url)
-
-    if jira_soap_client == None or jira_auth == None:
-        return -1
-
-    try:
-        commit_msg_text = open(commit_msg_filename).read()
-
-    except KeyboardInterrupt:
-        log.info('... interrupted')
-
-    except Exception, e:
-        log.error("Failed to open file '%s'", commit_msg_filename)
-        log.debug(e)
-        return -1
-
-    return validate_commit_text(jira_soap_client, jira_auth, commit_msg_text)
-
-
-# Performs the git "post-commit" hook
-# Uses "git" to find out the most recent commit
-# Parses commit message text to find references to Jira issues
-# and updates the Jira issue by adding the commit message text
-    
-# to the issue
-# Returns: Nothing (as returning error wont do us any good
-#          on a post-commit hook)
-def handle_post_commit():
-    if not enabled_on_branch(git_get_curr_branchname()):
-        return 0
-
-    jira_url = get_jira_url()
-    if jira_url == None:
-        return -1
-
-    commit_id = git_get_last_commit_id()
-    commit_text = git_get_commit_msg(commit_id) 
-
-    (jira_soap_client, jira_auth) = jira_start_session(jira_url)
-
-    jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, git_get_curr_branchname())
-    return 
-
-
-# Performs the git "update" hook
+# Performs the git "pre_receive" hook
 # This hook is triggered on the remote repo, as a result
 # of "git push"
-# Parses the old and new commit IDs from argv[2] and argv[3]
-# argv[1] contains the "refname"
 def handle_pre_receive():
     buf = sys.stdin.read()
     log.debug("handle_post_receive: stdin='%s'", buf)
     (old_commit_id, new_commit_id, ref) =  string.split(buf, ' ')
-
 
     if old_commit_id == None or new_commit_id == None or ref == None:
         log.error("post-receive hook stdin is incorrect '%s'", buf)
@@ -169,7 +81,6 @@ def handle_pre_receive():
     branch = git_get_branchname_from_ref(ref)
     if not enabled_on_branch(branch):
         return 0
-
 
     jira_url = get_jira_url()
     if jira_url == None:
@@ -198,51 +109,6 @@ def handle_pre_receive():
         commit_text = git_get_commit_msg(commit_id)
         if validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id) != 0:
             return -1
-        else:
-           jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
-        
-    return 0
-
-# post-receive hook is called with no parameters
-# but STDIN has <old-commit-id> <new-commit-id> <refname>
-def handle_post_receive():
-    buf = sys.stdin.read()
-    log.debug("handle_post_receive: stdin='%s'", buf)
-    (old_commit_id, new_commit_id, ref) =  string.split(buf, ' ')
-
-
-    if old_commit_id == None or new_commit_id == None or ref == None:
-        log.error("post-receive hook stdin is incorrect '%s'", buf)
-        return -1
-
-    branch = git_get_branchname_from_ref(ref)
-    if not enabled_on_branch(branch):
-        return 0
-
-
-    jira_url = get_jira_url()
-    if jira_url == None:
-        return -1
-
-
-    (jira_soap_client, jira_auth) = jira_start_session(jira_url)
-    if jira_soap_client == None or jira_auth == None:
-        return -1
-
-    zeros = '0000000000000000000000000000000000000000'
-    if new_commit_id == zeros:
-        log.debug('branch at %s deleted' % old_commit_id)
-        return 0
-   
-    if old_commit_id == zeros:
-        log.debug('new branch at %s' % new_commit_id)
-        commit_id_array = [new_commit_id]
-    else:
-        commit_id_array = git_get_array_of_commit_ids(old_commit_id, new_commit_id)
-
-    if commit_id_array == None or len(commit_id_array)==0:
-        log.error("no commit ids!")
-        return -1
 
     for commit_id in commit_id_array:
         branches = git_get_branches_with_commit(commit_id)
@@ -252,8 +118,8 @@ def handle_post_receive():
             jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
         else:
             log.info('Not recording %s, its already recorded for branches: %s' % (commit_id, branches))
-
-    return 0        
+        
+    return 0
 
 
 def validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id=None):
@@ -295,10 +161,6 @@ def jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch
     
 
     
-    
-
-
-
 # Given a function pointer, iterates through the commit message 
 # text for Jira magic words, and calls the function repeatedly
 # returns number of issues found and touched
@@ -474,7 +336,6 @@ def jira_find_issue(issuekey, jira_soap_client, jira_auth, jira_text):
     except Exception, e:
         log.error("No such issue '%s' in Jira", issuekey)
         log.debug(e)
-        return -1
 
 
 def jira_add_comment_to_issue(issuekey, jira_soap_client, jira_auth, jira_text):
