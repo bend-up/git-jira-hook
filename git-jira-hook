@@ -109,15 +109,8 @@ def handle_pre_receive():
         commit_text = git_get_commit_msg(commit_id)
         if validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id) != 0:
             return -1
-
-    for commit_id in commit_id_array:
-        branches = git_get_branches_with_commit(commit_id)
-        branches.remove(branch)
-        if len(branches) == 0:
-            commit_text = git_get_commit_msg(commit_id)
-            jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
         else:
-            log.info('Not recording %s, its already recorded for branches: %s' % (commit_id, branches))
+            jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
         
     return 0
 
