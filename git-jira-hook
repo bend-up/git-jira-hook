@@ -104,11 +104,26 @@ def handle_pre_receive():
 def validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id):
     refed_issue_count = call_pattern_hook(commit_text, "", \
             jira_find_issue, jira_soap_client, jira_auth, commit_id)
-            
-    fixed_issue_count = call_pattern_hook(commit_text, "fixes ", \
+
+    startprogess_issue_count = call_pattern_hook(commit_text, "startprogress ", \
             jira_find_issue, jira_soap_client, jira_auth, commit_id)
 
-    if refed_issue_count + fixed_issue_count == 0:
+    stopprogess_issue_count = call_pattern_hook(commit_text, "stopprogess ", \
+            jira_find_issue, jira_soap_client, jira_auth, commit_id)
+     
+    resolve_issue_count = call_pattern_hook(commit_text, "resolveissue ", \
+            jira_find_issue, jira_soap_client, jira_auth, commit_id)
+
+    closeissue_issue_count = call_pattern_hook(commit_text, "closeissue ", \
+            jira_find_issue, jira_soap_client, jira_auth, commit_id)
+    
+    reopen_issue_count = call_pattern_hook(commit_text, "reopenissue ", \
+            jira_find_issue, jira_soap_client, jira_auth, commit_id)
+
+    resolvecloseissue_issue_count = call_pattern_hook(commit_text, "resolvecloseissue ", \
+            jira_find_issue, jira_soap_client, jira_auth, commit_id)
+     
+    if refed_issue_count + startprogess_issue_count + stopprogess_issue_count + resolve_issue_count + closeissue_issue_count + reopen_issue_count + resolvecloseissue_issue_count== 0:
             return -1
         
     return 0
@@ -130,8 +145,18 @@ def jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch
 
     call_pattern_hook(commit_msg_only, '', jira_add_comment_to_issue, \
                                 jira_soap_client, jira_auth, jira_text)
-    call_pattern_hook(commit_msg_only, 'fixes ', jira_add_comment_to_and_fix_issue, \
+    call_pattern_hook(commit_msg_only, 'startprogress ', jira_add_comment_to_and_startprogress_issue, \
                                 jira_soap_client, jira_auth, jira_text)
+    call_pattern_hook(commit_msg_only, 'stopprogress ', jira_add_comment_to_and_stopprogress_issue, \
+                                jira_soap_client, jira_auth, jira_text)    
+    call_pattern_hook(commit_msg_only, 'resolveissue ', jira_add_comment_to_and_resolve_issue, \
+                                jira_soap_client, jira_auth, jira_text)
+    call_pattern_hook(commit_msg_only, 'closeissue ', jira_add_comment_to_and_close_issue, \
+                                jira_soap_client, jira_auth, jira_text)
+    call_pattern_hook(commit_msg_only, 'reopenissue ', jira_add_comment_to_and_reopen_issue, \
+                                jira_soap_client, jira_auth, jira_text)
+    call_pattern_hook(commit_msg_only, 'resolvecloseissue ', jira_add_comment_to_and_resolveclose_issue, \
+                                jira_soap_client, jira_auth, jira_text)    
     return
     
 
@@ -325,16 +350,76 @@ def jira_add_comment_to_issue(issuekey, jira_soap_client, jira_auth, jira_text):
         return -1
 
 
-def jira_add_comment_to_and_fix_issue(issuekey, jira_soap_client, jira_auth, jira_text):
+def jira_add_comment_to_and_resolve_issue(issuekey, jira_soap_client, jira_auth, jira_text):
     try:
-        jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '281', [])
-        log.debug("Fixed issue '%s' in Jira", issuekey)
+        jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '5', [])
+        log.debug("Resolve issue '%s' in Jira", issuekey)
         return 0
     
     except Exception, e:
-        log.error("Error fixing issue '%s' in Jira", issuekey)
+        log.error("Error resolving issue '%s' in Jira", issuekey)
         log.debug(e)
         return -1
+
+
+def jira_add_comment_to_and_reopen_issue(issuekey, jira_soap_client, jira_auth, jira_text):
+    try:
+        jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '3', [])
+        log.debug("Reopen issue '%s' in Jira", issuekey)
+        return 0
+    
+    except Exception, e:
+        log.error("Error reopening issue '%s' in Jira", issuekey)
+        log.debug(e)
+        return -1
+    
+
+def jira_add_comment_to_and_startprogress_issue(issuekey, jira_soap_client, jira_auth, jira_text):
+    try:
+        jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '4', [])
+        log.debug("Start progess issue '%s' in Jira", issuekey)
+        return 0
+    
+    except Exception, e:
+        log.error("Error start progessing issue '%s' in Jira", issuekey)
+        log.debug(e)
+        return -1
+
+
+def jira_add_comment_to_and_stopprogress_issue(issuekey, jira_soap_client, jira_auth, jira_text):
+    try:
+        jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '301', [])
+        log.debug("Stop progress issue '%s' in Jira", issuekey)
+        return 0
+    
+    except Exception, e:
+        log.error("Error stop progressing issue '%s' in Jira", issuekey)
+        log.debug(e)
+        return -1
+
+
+def jira_add_comment_to_and_close_issue(issuekey, jira_soap_client, jira_auth, jira_text):
+    try:
+        jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '2', [])
+        log.debug("Closed issue '%s' in Jira", issuekey)
+        return 0
+    
+    except Exception, e:
+        log.error("Error closing issue '%s' in Jira", issuekey)
+        log.debug(e)
+        return -1
+
+
+def jira_add_comment_to_and_resolveclose_issue(issuekey, jira_soap_client, jira_auth, jira_text):
+    try:
+        jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '701', [])
+        log.debug("Resolve Closed issue '%s' in Jira", issuekey)
+        return 0
+    
+    except Exception, e:
+        log.error("Error closing issue '%s' in Jira", issuekey)
+        log.debug(e)
+        return -1    
 
 #-----------------------------------------------------------------------------
 # Miscellaneous Jira related utility functions
