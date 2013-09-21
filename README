@@ -59,7 +59,7 @@ This is particularly useful for corporate git repositories.
 In order to specify which issue (or issues) you want the commit message 
 to get tracked to in Jira, you place magic text markers such as:
 
- "NNN"  or "fixes NNN" 
+ "NNN-1"  or "progress NNN" or "resolve NNN" or "reopen NNN"or "close NNN"
 
 anywhere in your commit message, where "NNN" is the name of an open 
 Jira issue.
@@ -71,7 +71,7 @@ your git repository.
 
     Using the new and fresh git-jira-hook
 
-    working on TST-189, refs HW-278 fixes FW-702
+    working on TST-189, progress HW-278 resolve FW-702
 
 
 The following things will happen:
@@ -88,7 +88,7 @@ following comments will be added:
 
     Using the new and fresh git-jira-hook
 
-    working on TST-189, refs HW-278 fixes FW-702
+    working on TST-189, progress HW-278 resolve FW-702
 
 In addition, 
     * the issue "FW-702" will be marked as resolved.
@@ -186,12 +186,12 @@ values to use for your "jira.url".
 3.2 Installation for "upstream" repository
 ------------------------------------------
 (i)   Copy or symlink this script to 
-      <upstream-repo-GIT-dir>/hooks/post-receive
+      <upstream-repo-GIT-dir>/hooks/pre-receive
       and mark it executable
 
       Example:
-       cp git-jira-hook upstream-project.git/hooks/post-receive
-       chmod +x upstream-project.git/hooks/post-receive
+       cp git-jira-hook upstream-project.git/hooks/pre-receive
+       chmod +x upstream-project.git/hooks/pre-receive
        
       Optional: install it as an 'update' hook (only does validation) and
       'commit-msg' and 'post-commit' (if commits happen directly on this upstream repo)
@@ -243,7 +243,7 @@ Anywhere in your commit message, you must put the following strings
 (without the quotes):
    "FOO-23"
    "BAR-42"
-   "fixes FOO-56"
+   "resolve FOO-56"
 
 
 
