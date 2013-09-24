@@ -3,17 +3,17 @@
 ##########################################################################
 # Copyright 2009 Broadcom Corporation
 #
-# Licensed under the Apache License, Version 2.0 (the "License"); 
-# you may not use this file except in compliance with the License. 
-# You may obtain a copy of the License at 
-# 
-#      http://www.apache.org/licenses/LICENSE-2.0 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# Unless required by applicable law or agreed to in writing, software 
-# distributed under the License is distributed on an "AS IS" BASIS, 
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-# See the License for the specific language governing permissions and 
-# limitations under the License. 
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 # File: git-jira-hook
 # Author: Joyjit Nath
@@ -23,17 +23,17 @@
 # Purpose:
 # This is a git hook, to be used in an environment where git is used
 # as the source control and Jira is used for bug tracking.
-# 
+#
 # See accompanying README file for help in using this.
-# 
+#
 
 
 import logging
 import sys
 import os
 
-# Change this value to "CRITICAL/ERROR/WARNING/INFO/DEBUG/NOTSET" 
-# as appropriate. 
+# Change this value to "CRITICAL/ERROR/WARNING/INFO/DEBUG/NOTSET"
+# as appropriate.
 loglevel=logging.INFO
 # loglevel=logging.DEBUG
 
@@ -64,7 +64,7 @@ def main():
     else:
         log.error("invoked as '%s'. Need to be invoked as pre-receive. " , myname)
         return -1
- 
+
 
 # Performs the git "pre_receive" hook
 # This hook is triggered on the remote repo, as a result
@@ -73,7 +73,7 @@ def handle_pre_receive():
     buf = sys.stdin.read()
     log.debug("handle_pre_receive: stdin='%s'", buf)
     (old_commit_id, new_commit_id, ref) =  string.split(buf, ' ')
-    
+
     if old_commit_id == None or new_commit_id == None or ref == None:
         log.error("post-receive hook stdin is incorrect '%s'", buf)
         return -1
@@ -89,15 +89,20 @@ def handle_pre_receive():
     (jira_soap_client, jira_auth) = jira_start_session(jira_url)
     if jira_soap_client == None or jira_auth == None:
         return -1
-    
+
+    zeros = '0000000000000000000000000000000000000000'
+    if new_commit_id == zeros:
+        log.debug('branch at %s deleted' % old_commit_id)
+        return 0
+
     commit_text = git_get_commit_msg(new_commit_id)
     #print "new_commit_text=",commit_text
     if validate_commit_text(jira_soap_client, jira_auth, commit_text, new_commit_id) == -1:
         log.error("Please add any referenced Jira issue e.g. VOT-14 in commit message for commit id: %s", new_commit_id)
         return -1
     else:
-        jira_add_comment(jira_soap_client, jira_auth, new_commit_id, commit_text, branch)       
-        
+        jira_add_comment(jira_soap_client, jira_auth, new_commit_id, commit_text, branch)
+
     return 0
 
 
@@ -108,26 +113,26 @@ def validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id):
 
     progress_issue_count = call_pattern_hook(commit_text, "progress ", \
             jira_find_issue, jira_soap_client, jira_auth, commit_id)
-     
+
     resolve_issue_count = call_pattern_hook(commit_text, "resolve ", \
             jira_find_issue, jira_soap_client, jira_auth, commit_id)
 
     close_issue_count = call_pattern_hook(commit_text, "close ", \
             jira_find_issue, jira_soap_client, jira_auth, commit_id)
-    
+
     reopen_issue_count = call_pattern_hook(commit_text, "reopen ", \
             jira_find_issue, jira_soap_client, jira_auth, commit_id)
-     
+
     if refed_issue_count + progress_issue_count + resolve_issue_count + close_issue_count + reopen_issue_count == 0:
             return -1
-        
+
     return 0
 
 
 def jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch):
     gitweb_url = get_gitweb_url()
     gitweb_branch_url = get_gitweb_branch_url()
-    
+
     # commit_text is git's pretty (medium) format
     commit_msg_only = ''.join(commit_text.splitlines()[4:])
     jira_text = commit_text
@@ -149,10 +154,10 @@ def jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch
     call_pattern_hook(commit_msg_only, 'reopen ', jira_add_comment_to_and_reopen_issue, \
                                 jira_soap_client, jira_auth, jira_text)
     return
-    
 
-    
-# Given a function pointer, iterates through the commit message 
+
+
+# Given a function pointer, iterates through the commit message
 # text for Jira magic words, and calls the function repeatedly
 # returns number of issues found and touched
 # in case of error, return -1
@@ -162,7 +167,7 @@ def call_pattern_hook(text, pattern, hookfn, jira_soap_client, jira_auth, jira_t
         exit(-1)
 
     magic = re.compile(pattern + '(\w\w*-\d\d*)')
-    
+
     iterator = magic.finditer(text)
     issue_count = 0
     seen_issues = set()
@@ -217,7 +222,7 @@ def jira_start_session(jira_url):
 def jira_login(jira_url, soap_client):
 
     auth = get_jira_cached_auth(jira_url)
-    if auth: 
+    if auth:
         auth = jira_implicit_login(soap_client, auth)
 
     if not auth:
@@ -233,11 +238,11 @@ def jira_login(jira_url, soap_client):
         username = get_cfg_value(global_jirarc, jira_url, "username")
         password = get_cfg_value(global_jirarc, jira_url, "password")
         auth = soap_client.service.login(username, password)
-    
+
     if not auth:
         save_jira_cached_auth(jira_url, "")
         auth = jira_explicit_login(soap_client)
-    
+
     if auth:
         save_jira_cached_auth(jira_url, auth)
 
@@ -248,7 +253,7 @@ def jira_implicit_login(soap_client, auth):
     # test jira to see if auth is valid
     try:
         jira_types = soap_client.service.getIssueTypes(auth)
-        
+
         # we made it ok
         return auth
     except KeyboardInterrupt:
@@ -257,7 +262,7 @@ def jira_implicit_login(soap_client, auth):
     except Exception, e:
         log.debug("Previous Jira login is invalid or has expired")
         # log.debug(e)
-        
+
 
     return None
 
@@ -284,7 +289,7 @@ def jira_explicit_login(soap_client):
         # print "abc"
         # print "self.soap_client login...%s " % username + password
         try:
-            auth = soap_client.service.login(username, password) 
+            auth = soap_client.service.login(username, password)
 
             try:
                 jira_types = soap_client.service.getIssueTypes(auth)
@@ -317,7 +322,7 @@ def jira_explicit_login(soap_client):
 def jira_find_issue(issuekey, jira_soap_client, jira_auth, jira_text):
     try:
         issue = jira_soap_client.service.getIssue(jira_auth, issuekey)
-        log.debug("Found issue '%s' in Jira: (%s)",  
+        log.debug("Found issue '%s' in Jira: (%s)",
                     issuekey, issue["summary"])
         return 0
 
@@ -358,7 +363,7 @@ def jira_add_comment_to_and_resolve_issue(issuekey, jira_soap_client, jira_auth,
         jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '5', [])
         log.debug("Resolve issue '%s' in Jira", issuekey)
         return 0
-    
+
     except Exception, e:
         log.error("Error resolving issue '%s' in Jira", issuekey)
         log.debug(e)
@@ -370,12 +375,12 @@ def jira_add_comment_to_and_reopen_issue(issuekey, jira_soap_client, jira_auth, 
         jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '3', [])
         log.debug("Reopen issue '%s' in Jira", issuekey)
         return 0
-    
+
     except Exception, e:
         log.error("Error reopening issue '%s' in Jira", issuekey)
         log.debug(e)
         return -1
-    
+
 
 
 def jira_add_comment_to_and_close_issue(issuekey, jira_soap_client, jira_auth, jira_text):
@@ -383,7 +388,7 @@ def jira_add_comment_to_and_close_issue(issuekey, jira_soap_client, jira_auth, j
         jira_soap_client.service.progressWorkflowAction(jira_auth, issuekey, '2', [])
         log.debug("Close issue '%s' in Jira", issuekey)
         return 0
-    
+
     except Exception, e:
         log.error("Error closing issue '%s' in Jira", issuekey)
         log.debug(e)
@@ -442,7 +447,7 @@ def get_cfg_value(cfg_file_name, section, key, silent=False):
             log.warn("Error reading %s looking for [%s] %s" % (cfg_file_name, section, key), exc_info=True)
         return None
     return value
-    
+
 
 def save_cfg_value(cfg_file_name, section, key, value):
     try:
@@ -476,7 +481,7 @@ def save_cfg_value(cfg_file_name, section, key, value):
         log.warning("Failed to write '%s'='%s' to file %s", key, value, cfg_file_name)
         log.debug(e)
         return None
-    return 1  
+    return 1
 
 # given a string, executes it as an executable, and returns the STDOUT
 # as a string
@@ -566,7 +571,7 @@ def git_get_array_of_commit_ids(start_id, end_id):
     output = get_shell_cmd_output("git rev-list --reverse " + start_id + ".." + end_id)
     if output == "":
         return None
-    
+
     # parse the result into an array of strings
     commit_id_array = string.split(output, '\n')
     return commit_id_array
@@ -574,7 +579,7 @@ def git_get_array_of_commit_ids(start_id, end_id):
 def git_get_branches_with_commit(commit_id):
     output = get_shell_cmd_output("git branch --contains %s" % commit_id)
     return [b.replace('* ', '').strip() for b in output.split('\n')]
-    
+
 #----------------------------------------------------------------------------
 # python script entry point. Dispatches main()
 if __name__ == "__main__":
