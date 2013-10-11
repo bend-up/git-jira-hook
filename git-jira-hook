@@ -330,7 +330,7 @@ def jira_find_issue(issuekey, jira_soap_client, jira_auth, jira_text):
         log.info("... interrupted")
 
     except Exception, e:
-        log.error("No such issue '%s' in Jira", issuekey)
+        log.debug("No such issue '%s' in Jira", issuekey)
         log.debug(e)
 	return -1
 
