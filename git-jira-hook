@@ -97,34 +97,7 @@ def handle_pre_receive():
 
     commit_text = git_get_commit_msg(new_commit_id)
     #print "new_commit_text=",commit_text
-    if validate_commit_text(jira_soap_client, jira_auth, commit_text, new_commit_id) == -1:
-        log.error("Please add any referenced Jira issue e.g. VOT-14 in commit message for commit id: %s", new_commit_id)
-        return -1
-    else:
-        jira_add_comment(jira_soap_client, jira_auth, new_commit_id, commit_text, branch)
-
-    return 0
-
-
-def validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id):
-
-    refed_issue_count = call_pattern_hook(commit_text, "", \
-            jira_find_issue, jira_soap_client, jira_auth, commit_id)
-
-    progress_issue_count = call_pattern_hook(commit_text, "progress ", \
-            jira_find_issue, jira_soap_client, jira_auth, commit_id)
-
-    resolve_issue_count = call_pattern_hook(commit_text, "resolve ", \
-            jira_find_issue, jira_soap_client, jira_auth, commit_id)
-
-    close_issue_count = call_pattern_hook(commit_text, "close ", \
-            jira_find_issue, jira_soap_client, jira_auth, commit_id)
-
-    reopen_issue_count = call_pattern_hook(commit_text, "reopen ", \
-            jira_find_issue, jira_soap_client, jira_auth, commit_id)
-
-    if refed_issue_count + progress_issue_count + resolve_issue_count + close_issue_count + reopen_issue_count == 0:
-            return -1
+    jira_add_comment(jira_soap_client, jira_auth, new_commit_id, commit_text, branch)
 
     return 0
 
