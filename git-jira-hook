@@ -71,11 +71,11 @@ def main():
 # of "git push"
 def handle_pre_receive():
     buf = sys.stdin.read()
-    log.debug("handle_post_receive: stdin='%s'", buf)
+    log.debug("handle_pre_receive: stdin='%s'", buf)
     (old_commit_id, new_commit_id, ref) =  string.split(buf, ' ')
 
     if old_commit_id == None or new_commit_id == None or ref == None:
-        log.error("post-receive hook stdin is incorrect '%s'", buf)
+        log.error("pre-receive hook stdin is incorrect '%s'", buf)
         return -1
 
     branch = git_get_branchname_from_ref(ref)
@@ -107,10 +107,7 @@ def handle_pre_receive():
 
     for commit_id in commit_id_array:
         commit_text = git_get_commit_msg(commit_id)
-        if validate_commit_text(jira_soap_client, jira_auth, commit_text, commit_id) != 0:
-            return -1
-        else:
-            jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
+        jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
         
     return 0
 
