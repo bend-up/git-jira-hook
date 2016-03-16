@@ -72,6 +72,11 @@ def main():
 def handle_pre_receive():
     buf = sys.stdin.read()
     log.debug("handle_pre_receive: stdin='%s'", buf)
+
+    if len(string.split(buf, ' ')) != 3:
+        log.info("Unexpected receive message, probably tag push, not handling")
+        return 0;
+
     (old_commit_id, new_commit_id, ref) =  string.split(buf, ' ')
 
     if old_commit_id == None or new_commit_id == None or ref == None:
