@@ -108,8 +108,8 @@ def handle_pre_receive():
         return -1
 
     for commit_id in commit_id_array:
-        commit_text = branch + ': ' +  git_get_commit_text(commit_id)
-	commit_title = git_get_commit_title(commit_id)
+        commit_text = git_get_commit_text(commit_id)
+	commit_title = branch + ': ' +  git_get_commit_title(commit_id)
         jira_add_comment(jira_auth, commit_id, commit_text, commit_title, branch)
         
     return 0
