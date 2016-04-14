@@ -31,13 +31,7 @@
 import logging
 import sys
 import os
-
-# Change this value to "CRITICAL/ERROR/WARNING/INFO/DEBUG/NOTSET"
-# as appropriate.
-loglevel=logging.INFO
-# loglevel=logging.DEBUG
-
-
+import requests 
 import subprocess
 import re
 import getpass
@@ -45,6 +39,9 @@ import stat
 import ConfigParser
 import string
 from suds.client import Client
+
+loglevel=logging.INFO
+#loglevel=logging.DEBUG
 
 myname = os.path.basename(sys.argv[0])
 global_jirarc = os.path.dirname(sys.argv[0]) + "/../jirarc"
@@ -58,6 +55,7 @@ if loglevel != logging.DEBUG:
     # suds prints out a lot of ERRORs that we don't need to see, since it raises an Exception also
     logging.getLogger('suds.client').setLevel(logging.CRITICAL)
 log = logging.getLogger(myname)
+
 def main():
     if myname == "pre-receive":
         return handle_pre_receive()
@@ -71,16 +69,15 @@ def main():
 # of "git push"
 def handle_pre_receive():
     buf = sys.stdin.read()
-    log.debug("handle_pre_receive: stdin='%s'", buf)
-
+    log.debug("handle_post_receive: stdin='%s'", buf)
     if len(string.split(buf, ' ')) != 3:
-        log.info("Unexpected receive message, probably tag push, not handling")
+	log.info("Unexpected receive message, probably tag push, not handling")
         return 0;
 
     (old_commit_id, new_commit_id, ref) =  string.split(buf, ' ')
 
     if old_commit_id == None or new_commit_id == None or ref == None:
-        log.error("pre-receive hook stdin is incorrect '%s'", buf)
+        log.error("post-receive hook stdin is incorrect '%s'", buf)
         return -1
 
     branch = git_get_branchname_from_ref(ref)
@@ -91,8 +88,8 @@ def handle_pre_receive():
     if jira_url == None:
         return -1
 
-    (jira_soap_client, jira_auth) = jira_start_session(jira_url)
-    if jira_soap_client == None or jira_auth == None:
+    jira_auth = jira_login(jira_url)
+    if jira_auth == None:
         return -1
 
     zeros = '0000000000000000000000000000000000000000'
@@ -111,36 +108,22 @@ def handle_pre_receive():
         return -1
 
     for commit_id in commit_id_array:
-        commit_text = git_get_commit_msg(commit_id)
-        jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch)
+        commit_text = branch + ': ' +  git_get_commit_text(commit_id)
+	commit_title = git_get_commit_title(commit_id)
+        jira_add_comment(jira_auth, commit_id, commit_text, commit_title, branch)
         
     return 0
 
 
-def jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch):
+def jira_add_comment(jira_auth, commit_id, commit_text, commit_title, branch):
     gitweb_url = get_gitweb_url()
     gitweb_branch_url = get_gitweb_branch_url()
 
-    # commit_text is git's pretty (medium) format
-    commit_msg_only = ''.join(commit_text.splitlines()[4:])
-    jira_text = commit_text
-    if gitweb_branch_url:
-        jira_text = jira_text.replace(commit_id, commit_id + ' on branch [%s|%s]'
-                                          % (branch, gitweb_branch_url + branch))
     if gitweb_url != None or gitweb_url != "":
-        jira_text = jira_text.replace(commit_id, \
-            "[" + commit_id + "|" + gitweb_url + commit_id + "]")
+        link = gitweb_url + commit_id
 
-    call_pattern_hook(commit_msg_only, '', jira_add_comment_to_issue, \
-                                jira_soap_client, jira_auth, jira_text)
-    call_pattern_hook(commit_msg_only, 'progress ', jira_add_comment_to_and_progress_issue, \
-                                jira_soap_client, jira_auth, jira_text)
-    call_pattern_hook(commit_msg_only, 'resolve ', jira_add_comment_to_and_resolve_issue, \
-                                jira_soap_client, jira_auth, jira_text)
-    call_pattern_hook(commit_msg_only, 'close ', jira_add_comment_to_and_close_issue, \
-                                jira_soap_client, jira_auth, jira_text)
-    call_pattern_hook(commit_msg_only, 'reopen ', jira_add_comment_to_and_reopen_issue, \
-                                jira_soap_client, jira_auth, jira_text)
+    call_pattern_hook(commit_text, commit_title, '', jira_add_comment_to_issue, jira_auth, link)
+    #TODO transitions
     return
 
 
@@ -149,7 +132,7 @@ def jira_add_comment(jira_soap_client, jira_auth, commit_id, commit_text, branch
 # text for Jira magic words, and calls the function repeatedly
 # returns number of issues found and touched
 # in case of error, return -1
-def call_pattern_hook(text, pattern, hookfn, jira_soap_client, jira_auth, jira_text):
+def call_pattern_hook(text, title, pattern, hookfn, jira_auth, link):
     if not callable(hookfn):
         log.error("Hook function is not callable");
         exit(-1)
@@ -161,12 +144,13 @@ def call_pattern_hook(text, pattern, hookfn, jira_soap_client, jira_auth, jira_t
     seen_issues = set()
     for match in iterator:
         issuekey = match.group(1)
-        # print "issuekey found=", issuekey
         if issuekey in seen_issues:
             continue
         else:
             seen_issues.add(issuekey)
-        ret = hookfn(issuekey, jira_soap_client, jira_auth, jira_text)
+	log.debug("Calling " +  hookfn.__name__ + " for " + issuekey)
+
+        ret = hookfn(issuekey, jira_auth, text, title, link)
         if ret != 0:
             return -1
         else:
@@ -178,155 +162,23 @@ def call_pattern_hook(text, pattern, hookfn, jira_soap_client, jira_auth, jira_t
 # Jira helper functions
 #
 
+def jira_login(jira_url):
 
-# Given a Jira server URL (which is stored in git config)
-# Starts an authenticated jira session using SOAP api
-# Returns a list of the SOAP object and the authentication token
-def jira_start_session(jira_url):
-    jira_url = jira_url.rstrip("/")
-    try:
-        soap_client = Client(jira_url + "/rpc/soap/jirasoapservice-v2?wsdl")
-        # print "self.soap_client set", self.soap_client
-
-    except KeyboardInterrupt:
-        log.info("... interrupted")
-
-    except Exception, e:
-        save_jira_cached_auth(jira_url, "")
-        log.error("Invalid Jira URL: '%s'", jira_url)
-        log.debug(e)
-        return -1
-
-    auth = jira_login(jira_url, soap_client)
-    if auth == None:
-        return (None, None)
-
-    return (soap_client, auth)
-
-# Try to use the cached authentication object to log in
-# to Jira first. ("implicit")
-# if that fails, then prompt the user ("explicit")
-# for username/password
-def jira_login(jira_url, soap_client):
-
-    auth = get_jira_cached_auth(jira_url)
-    if auth:
-        auth = jira_implicit_login(soap_client, auth)
-
-    if not auth:
-        username = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "username", True)
-        password = get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "password", True)
-	try:
-            auth = soap_client.service.login(username, password)
-	except:
-            auth = None
-
-    # If the user based version was unsuccessful, try the project one
-    if not auth:
-        username = get_cfg_value(global_jirarc, jira_url, "username")
-        password = get_cfg_value(global_jirarc, jira_url, "password")
-        auth = soap_client.service.login(username, password)
-
-    if not auth:
-        save_jira_cached_auth(jira_url, "")
-        auth = jira_explicit_login(soap_client)
-
-    if auth:
-        save_jira_cached_auth(jira_url, auth)
+    auth = {}
+    auth["username"] = get_cfg_value(global_jirarc, jira_url, "username")
+    auth["password"] = get_cfg_value(global_jirarc, jira_url, "password")
 
     return auth
 
-def jira_implicit_login(soap_client, auth):
-
-    # test jira to see if auth is valid
+def jira_add_comment_to_issue(issuekey, jira_auth, text, title, link):
     try:
-        jira_types = soap_client.service.getIssueTypes(auth)
-
-        # we made it ok
-        return auth
-    except KeyboardInterrupt:
-        log.info("... interrupted")
-
-    except Exception, e:
-        log.debug("Previous Jira login is invalid or has expired")
-        # log.debug(e)
-
-
-    return None
-
-def jira_explicit_login(soap_client):
-    max_retry_count = 3
-    retry_count = 0
-
-    while retry_count < max_retry_count:
-        if retry_count > 0:
-            log.info("Invalid Jira password/username combination, try again")
-
-        # We now need to read the Jira username/password from
-        # the console.
-        # However, there is a problem. When git hooks are invoked
-        # stdin is pointed to /dev/null, see here:
-        # http://kerneltrap.org/index.php?q=mailarchive/git/2008/3/4/1062624/thread
-        # The work-around is to re-assign stdin back to /dev/tty , as per
-        # http://mail.python.org/pipermail/patches/2002-February/007193.html
-        sys.stdin = open('/dev/tty', 'r')
-
-        username = raw_input('Jira username: ')
-        password = getpass.getpass('Jira password: ')
-
-        # print "abc"
-        # print "self.soap_client login...%s " % username + password
-        try:
-            auth = soap_client.service.login(username, password)
-
-            try:
-                jira_types = soap_client.service.getIssueTypes(auth)
-                return auth
-
-            except KeyboardInterrupt:
-                log.info("... interrupted")
-
-            except Exception,e:
-                log.error("User '%s' does not have access to Jira issues")
-                return None
-
-        except KeyboardInterrupt:
-            log.info("... interrupted")
-
-        except Exception,e:
-            log.debug("Login failed")
-
-        auth=None
-        retry_count = retry_count + 1
-
-
-    if auth == None:
-        log.error("Invalid Jira password/username combination")
-
-    return auth
-
-
-
-def jira_find_issue(issuekey, jira_soap_client, jira_auth, jira_text):
-    try:
-        issue = jira_soap_client.service.getIssue(jira_auth, issuekey)
-        log.debug("Found issue '%s' in Jira: (%s)",
-                    issuekey, issue["summary"])
-        return 0
-
-    except KeyboardInterrupt:
-        log.info("... interrupted")
-
-    except Exception, e:
-        log.debug("No such issue '%s' in Jira", issuekey)
-        log.debug(e)
-
-
-def jira_add_comment_to_issue(issuekey, jira_soap_client, jira_auth, jira_text):
-    try:
-        jira_soap_client.service.addComment(jira_auth, issuekey, {"body":jira_text})
-        log.debug("Added to issue '%s' in Jira:\n%s", issuekey, jira_text)
-        return 0
+	headers = {
+    		'Content-type': 'application/json',
+	}
+	data = '{"relationship":"Related commits","object":{"url":"' + link + '","title":"' + title + '","summary":""}}'
+	r = requests.post( get_jira_url() +'/rest/api/latest/issue/' + issuekey + '/remotelink', headers=headers, data=data, auth=(jira_auth["username"], jira_auth["password"]))
+        log.debug("Request: %s", r.json)
+	return 0
 
     except Exception, e:
         log.error("Error adding comment to issue '%s' in Jira", issuekey)
@@ -393,21 +245,6 @@ def get_jira_url():
         return None
 
     return jira_url
-
-def get_jira_cached_auth(jira_url):
-    value =  get_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", silent=True)
-    if not value:
-    	value =  get_cfg_value(global_jirarc, jira_url, "auth", silent=True)
-    return value
-
-def save_jira_cached_auth(jira_url, auth):
-    file_path = os.environ['HOME'] + "/.jirarc"
-    value = None
-    if os.path.isfile(file_path):
-        value = save_cfg_value(os.environ['HOME'] + "/.jirarc", jira_url, "auth", auth)
-    if not value:
-        value = save_cfg_value(global_jirarc, jira_url, "auth", auth)
-
 
 #---------------------------------------------------------------------
 # Misc. helper functions
@@ -549,8 +386,11 @@ def git_config_set(name, value):
 def git_config_unset(name):
     os.system("git config --unset-all " + name)
 
-def git_get_commit_msg(commit_id):
+def git_get_commit_text(commit_id):
     return get_shell_cmd_output("git rev-list --pretty --max-count=1 " + commit_id)
+
+def git_get_commit_title(commit_id):
+    return get_shell_cmd_output("git show -s --date=short --pretty=format:'%h - %an, %ad: %s'  " + commit_id)
 
 def git_get_last_commit_id():
     return get_shell_cmd_output("git log --pretty=format:%H -1")
